@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Игротека</title>
+<script>/* old invite links pointed at the site root: send them to the game */ if(/[?&](room|chatwin)=/.test(location.search)) location.replace("mashinki/"+location.search);</script>
+<meta name="description" content="Игры с друзьями прямо в браузере: без установки и регистрации.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Russo+One&display=swap">
+<style>
+:root{--bg:#0b0e15;--panel:#141924;--panel2:#1b2230;--line:#273042;--ink:#eef1f8;--muted:#98a2b6;--accent:#ee4f9b;--accent2:#7c5cff}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);font-family:"Golos Text",system-ui,sans-serif;line-height:1.5;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;z-index:-1;background:
+  radial-gradient(60% 50% at 15% 0%,rgba(238,79,155,.22),transparent 70%),
+  radial-gradient(55% 45% at 90% 10%,rgba(124,92,255,.22),transparent 70%),
+  radial-gradient(70% 60% at 50% 110%,rgba(47,180,196,.14),transparent 70%)}
+a{color:inherit}
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+nav{display:flex;align-items:center;justify-content:space-between;padding:18px 0}
+.logo{display:flex;align-items:center;gap:10px;font-family:"Russo One",sans-serif;font-size:20px;letter-spacing:.5px;text-decoration:none}
+.logo i{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:linear-gradient(135deg,var(--accent),var(--accent2));font-style:normal;font-size:18px;box-shadow:0 6px 18px rgba(238,79,155,.35)}
+nav .links{display:flex;gap:18px;font-size:14px;color:var(--muted)}
+nav .links a{text-decoration:none}nav .links a:hover{color:var(--ink)}
+.hero{padding:42px 0 26px;text-align:center}
+.hero h1{font-family:"Russo One",sans-serif;font-weight:400;font-size:clamp(34px,6vw,62px);line-height:1.05;margin:0 0 14px}
+.hero h1 span{background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero p{margin:0 auto;max-width:560px;color:var(--muted);font-size:17px}
+.pills{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:20px}
+.pill{font-size:13px;color:var(--ink);background:rgba(255,255,255,.06);border:1px solid var(--line);padding:6px 12px;border-radius:999px}
+h2{font-family:"Russo One",sans-serif;font-weight:400;font-size:24px;margin:34px 0 14px}
+.feat{display:grid;grid-template-columns:1.25fr 1fr;gap:0;border-radius:24px;overflow:hidden;background:var(--panel);border:1px solid var(--line);box-shadow:0 30px 60px rgba(0,0,0,.45)}
+.feat .shot{position:relative;min-height:320px;background:#1d2a40 url(img/mashinki.jpg) center/cover no-repeat}
+.feat .shot::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent 60%,var(--panel))}
+.badge{position:absolute;z-index:1;left:16px;top:16px;font-size:12px;font-weight:700;background:var(--accent);color:#fff;padding:5px 10px;border-radius:999px;box-shadow:0 6px 16px rgba(238,79,155,.4)}
+.feat .info{padding:28px 28px 26px;display:flex;flex-direction:column}
+.feat h3{font-family:"Russo One",sans-serif;font-weight:400;font-size:32px;margin:0 0 6px}
+.feat .lead{color:var(--muted);margin:0 0 16px}
+.feat ul{margin:0 0 22px;padding:0;list-style:none;display:grid;gap:8px;font-size:14.5px}
+.feat li{display:flex;gap:10px;align-items:flex-start}
+.feat li b{flex:none;width:24px;height:24px;border-radius:8px;display:grid;place-items:center;background:var(--panel2);font-size:13px}
+.btns{margin-top:auto;display:flex;gap:10px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:700;font-size:16px;padding:13px 22px;border-radius:14px;background:linear-gradient(135deg,var(--accent),#ff6fb3);color:#fff;box-shadow:0 10px 24px rgba(238,79,155,.38);transition:transform .15s,box-shadow .15s}
+.btn:hover{transform:translateY(-2px);box-shadow:0 14px 30px rgba(238,79,155,.5)}
+.btn.ghost{background:var(--panel2);box-shadow:none;border:1px solid var(--line);color:var(--ink)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.gcard{display:flex;flex-direction:column;border-radius:20px;overflow:hidden;background:var(--panel);border:1px solid var(--line);text-decoration:none;transition:transform .15s,box-shadow .15s}
+.gcard:hover{transform:translateY(-3px);box-shadow:0 18px 40px rgba(0,0,0,.45)}
+.gcard .gimg{height:150px;background:#2a1a10 center/cover no-repeat}
+.gcard .gbody{padding:14px 16px 16px;display:flex;flex-direction:column;gap:4px}
+.gcard b{font-family:"Russo One",sans-serif;font-weight:400;font-size:19px}.gcard span{color:var(--muted);font-size:13.5px}
+.gcard em{font-style:normal;font-weight:700;color:var(--accent);margin-top:6px}
+.soon{position:relative;border-radius:20px;border:1.5px dashed var(--line);background:rgba(255,255,255,.02);padding:22px;min-height:170px;display:flex;flex-direction:column;gap:6px}
+.soon .ic{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;font-size:24px;background:var(--panel2);margin-bottom:6px;filter:grayscale(.3)}
+.soon b{font-size:16px}.soon span{color:var(--muted);font-size:13.5px}
+.soon em{position:absolute;right:14px;top:14px;font-style:normal;font-size:11px;font-weight:700;color:var(--muted);border:1px solid var(--line);padding:3px 8px;border-radius:999px}
+.how{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.how div{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px}
+.how b{display:block;font-family:"Russo One",sans-serif;font-weight:400;font-size:28px;color:var(--accent);line-height:1;margin-bottom:8px}
+.how span{color:var(--muted);font-size:14px}
+footer{margin:46px 0 30px;color:var(--muted);font-size:13px;text-align:center}
+@media (max-width:820px){.feat{grid-template-columns:1fr}.feat .shot{min-height:220px}.feat .shot::after{background:linear-gradient(180deg,transparent 60%,var(--panel))}.grid,.how{grid-template-columns:1fr}nav .links{display:none}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav><a class="logo" href="./"><i>🎲</i>Игротека</a><div class="links"><a href="#games">Игры</a><a href="#how">Как играть</a></div></nav>
+
+  <section class="hero">
+    <h1>Игры с друзьями —<br><span>прямо в браузере</span></h1>
+    <p>Без установки и регистрации. Создай комнату, скинь друзьям ссылку и играйте вместе с компьютера или телефона.</p>
+    <div class="pills"><span class="pill">🌐 Онлайн по ссылке</span><span class="pill">📱 Работает на телефоне</span><span class="pill">🤖 Можно с ботами</span><span class="pill">💬 Чат в комнате</span></div>
+  </section>
+
+  <h2 id="games">Игры</h2>
+  <article class="feat">
+    <div class="shot" role="img" aria-label="Поле игры «Машинки»"><span class="badge">Хит</span></div>
+    <div class="info">
+      <h3>Машинки</h3>
+      <p class="lead">Гонка на кубиках в 3D: доведи все свои машины до финиша раньше соперников.</p>
+      <ul>
+        <li><b>👥</b><span>До 4 игроков онлайн или на одном экране, свободные места займут боты</span></li>
+        <li><b>⚡</b><span>Сбивай соперников, лови «Сюрпризы», бери бафы в «Арсенале» и шли «Подлянки»</span></li>
+        <li><b>🎨</b><span>18 локаций: небесная гавань, айсберг, крыша небоскрёба, ракета…</span></li>
+        <li><b>📱</b><span>Пока ждёшь ход — мини-игры в телефоне: гонки и дрифт</span></li>
+      </ul>
+      <div class="btns"><a class="btn" href="mashinki/">▶ Играть</a><a class="btn ghost" href="#how">Как играть</a></div>
+    </div>
+  </article>
+
+  <div class="grid" style="margin-top:16px">
+    <a class="gcard" href="shashki/"><div class="gimg" style="background-image:url(img/shashki.jpg)"></div><div class="gbody"><b>Русские шашки</b><span>С компьютером (3 уровня), вдвоём или онлайн с другом по ссылке.</span><em>▶ Играть</em></div></a>
+    <a class="gcard" href="morskoy-boy/"><div class="gimg" style="background-image:url(img/sea.jpg)"></div><div class="gbody"><b>Морской бой</b><span>Свой флот и размер поля. С компьютером или онлайн с другом.</span><em>▶ Играть</em></div></a>
+    <div class="soon"><em>скоро</em><div class="ic">🏆</div><b>Новая игра</b><span>Таблица рекордов и турниры — в планах.</span></div>
+  </div>
+
+  <h2 id="how">Как играть с друзьями</h2>
+  <div class="how">
+    <div><b>1</b><span>Открой игру и выбери вкладку «Онлайн».</span></div>
+    <div><b>2</b><span>Создай комнату и скинь друзьям ссылку-приглашение или код.</span></div>
+    <div><b>3</b><span>Когда все зашли, хозяин комнаты жмёт «Старт».</span></div>
+  </div>
+
+  <footer>Игротека · сделано для игры с друзьями</footer>
+</div>
+</body>
+</html>
