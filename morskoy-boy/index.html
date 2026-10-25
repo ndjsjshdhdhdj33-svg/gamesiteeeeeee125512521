@@ -19,6 +19,10 @@ button.b{font:inherit;font-weight:700;font-size:14px;border:1px solid var(--line
 button.b:hover{filter:brightness(1.15)}button.b:disabled{opacity:.45;cursor:default}
 button.b.acc{background:linear-gradient(135deg,var(--accent),#5fd0ff);border-color:transparent;color:#05202f}
 .main{max-width:1180px;margin:0 auto;padding:0 18px 24px}
+.main.with-chat{max-width:1500px;display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:18px;align-items:start}
+.main.with-chat .card.chat{margin:0;max-width:none;position:sticky;top:12px;height:calc(100vh - 90px);min-height:360px}
+.main.with-chat .chat ul{flex:1;max-height:none}
+@media (max-width:1100px){.main.with-chat{grid-template-columns:1fr}.main.with-chat .card.chat{position:static;height:auto;min-height:0}.main.with-chat .chat ul{max-height:240px}}
 .status{display:flex;align-items:center;justify-content:center;gap:12px;min-height:52px;margin:0 0 12px;padding:10px 16px;border-radius:16px;background:var(--panel);border:1px solid var(--line);font-weight:700;font-size:17px;text-align:center}
 .status.my{border-color:var(--accent);box-shadow:0 0 0 3px rgba(47,180,255,.18)}
 .boards{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start}
@@ -86,7 +90,7 @@ input.t{width:100%;font:inherit;font-size:15px;padding:10px 12px;border-radius:1
 </head>
 <body>
 <header><a href="../">← Все игры</a><h1>Морской бой</h1><button class="b" id="menuBtn" type="button">Меню</button></header>
-<div class="main">
+<div class="main" id="mainBox"><div class="play">
   <div class="status" id="status">Расставьте корабли</div>
   <div class="boards">
     <div class="bx mine"><h2>Моё поле <small id="mineInfo"></small></h2><div class="gwrap"><div class="shiplayer" id="sMine"></div><div class="grid" id="gMine"></div></div><div class="fleet" id="fMine"></div>
@@ -95,7 +99,7 @@ input.t{width:100%;font:inherit;font-size:15px;padding:10px 12px;border-radius:1
     <div class="bx enemy"><h2>Поле соперника <small id="enemyInfo"></small></h2><div class="gwrap"><div class="shiplayer" id="sEnemy"></div><div class="grid" id="gEnemy"></div></div><div class="fleet" id="fEnemy"></div></div>
   </div>
   <div class="row" style="justify-content:center;margin-top:14px;gap:10px"><button class="b" id="againBtn" type="button" hidden>Ещё партию</button><span class="finfo" id="roomLine"></span></div>
-  <div class="card chat" id="chatBox" hidden><h3>Чат</h3><ul id="chatList" aria-live="polite"></ul><form id="chatForm"><input id="chatInput" maxlength="200" placeholder="Сообщение…" autocomplete="off"><button class="b" type="submit">➤</button></form></div>
+  </div><div class="card chat" id="chatBox" hidden><h3>Чат</h3><ul id="chatList" aria-live="polite"></ul><form id="chatForm"><input id="chatInput" maxlength="200" placeholder="Сообщение…" autocomplete="off"><button class="b" type="submit">➤</button></form></div>
 </div>
 
 <div class="modal" id="setup">
@@ -406,11 +410,11 @@ function leaveRoom(gone){ const wasWait=roomData&&roomData.status==='wait'; if(u
 /* ---------- chat for online rooms (separate doc, last 60 messages) ---------- */
 let chatUnsub=null, chatRoomPath=null, chatSeen=0, chatPrimed=false;
 function chatStart(path){
-  chatStop(); chatRoomPath=path; chatPrimed=false; $('chatBox').hidden=false; $('chatList').innerHTML='<li class="ce">Сообщений пока нет — напишите сопернику</li>';
+  chatStop(); chatRoomPath=path; chatPrimed=false; $('chatBox').hidden=false; $('mainBox').classList.add('with-chat'); $('chatList').innerHTML='<li class="ce">Сообщений пока нет — напишите сопернику</li>';
   db.doc(path).get().then(sn=>{ if(!sn.exists) db.doc(path).set({msgs:[]}).catch(()=>{}); });
   chatUnsub=db.doc(path).onSnapshot(sn=>{ const d=sn.exists?sn.data():null; chatRender(d&&Array.isArray(d.msgs)?d.msgs:[]); });
 }
-function chatStop(){ if(chatUnsub){ chatUnsub(); chatUnsub=null; } chatRoomPath=null; const b=$('chatBox'); if(b) b.hidden=true; }
+function chatStop(){ if(chatUnsub){ chatUnsub(); chatUnsub=null; } chatRoomPath=null; const b=$('chatBox'); if(b) b.hidden=true; $('mainBox').classList.remove('with-chat'); }
 function chatRender(msgs){
   const ul=$('chatList'); if(!msgs.length){ ul.innerHTML='<li class="ce">Сообщений пока нет — напишите сопернику</li>'; return; }
   const atBottom=ul.scrollHeight-ul.scrollTop-ul.clientHeight<40;
