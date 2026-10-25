@@ -74,6 +74,13 @@ input.t{width:100%;font:inherit;font-size:15px;padding:10px 12px;border-radius:1
 .row{display:flex;gap:8px;align-items:center}
 .err{color:#ff8a8a;font-size:13px;min-height:18px;margin:6px 0 0}
 .code{font-family:"Russo One",sans-serif;font-size:34px;letter-spacing:6px;text-align:center;margin:6px 0}
+.chat{display:flex;flex-direction:column;gap:8px}
+.chat ul{list-style:none;margin:0;padding:0;max-height:220px;min-height:90px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.chat li{background:var(--panel2);border-radius:10px;padding:6px 9px;font-size:13.5px;line-height:1.35;display:grid;grid-template-columns:auto 1fr;column-gap:8px}
+.chat li b{font-size:12px}.chat li time{font-size:11px;color:var(--muted);justify-self:end}.chat li span{grid-column:1/3;word-break:break-word}
+.chat li.me{background:color-mix(in srgb,var(--accent) 22%,var(--panel2))}
+.chat li.ce{display:block;background:none;color:var(--muted);font-size:12.5px;text-align:center}
+.chat form{display:flex;gap:6px}.chat input{flex:1;min-width:0;font:inherit;font-size:14px;padding:9px 11px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--ink)}
 </style>
 </head>
 <body>
@@ -87,7 +94,7 @@ input.t{width:100%;font:inherit;font-size:15px;padding:10px 12px;border-radius:1
   <aside>
     <div class="card"><div class="turn"><span class="dot w" id="turnDot"></span><span id="turnT">Белые ходят</span></div><div class="sub" id="turnS"></div></div>
     <div class="card"><h3>Игроки</h3><div id="players"></div></div>
-    <div class="card"><div class="btns"><button class="b" id="undoBtn" type="button">↶ Отменить ход</button><button class="b" id="flipBtn" type="button">⇅ Перевернуть</button><button class="b" id="newBtn" type="button">Новая партия</button></div><div class="sub" id="roomLine"></div></div>
+    <div class="card chat" id="chatBox" hidden><h3>Чат</h3><ul id="chatList" aria-live="polite"></ul><form id="chatForm"><input id="chatInput" maxlength="200" placeholder="Сообщение…" autocomplete="off"><button class="b" type="submit">➤</button></form></div><div class="card"><div class="btns"><button class="b" id="undoBtn" type="button">↶ Отменить ход</button><button class="b" id="flipBtn" type="button">⇅ Перевернуть</button><button class="b" id="newBtn" type="button">Новая партия</button></div><div class="sub" id="roomLine"></div></div>
     <div class="card"><h3>Ходы</h3><div class="hist" id="hist"></div></div>
     <div class="card"><h3>Правила</h3><div class="sub" style="margin:0">Шашки ходят по диагонали вперёд. Бить обязательно, можно и назад; серию взятий нужно довести до конца. Дошёл до последнего ряда — дамка: ходит и бьёт на любое расстояние. Если шашка стала дамкой во время боя, она продолжает бить уже как дамка. Проигрывает тот, кому нечем ходить.</div></div>
   </aside>
@@ -299,6 +306,7 @@ function renderSide(){
   const h=G.hist; let html=''; for(let i=0;i<h.length;i+=2) html+='<span>'+(i/2+1)+'.</span><span>'+h[i]+'</span><span>'+(h[i+1]||'')+'</span>'; $('hist').innerHTML=html; $('hist').scrollTop=1e6;
   $('undoBtn').hidden=mode==='online'; $('undoBtn').disabled=!undo.length||animating;
   $('newBtn').textContent=mode==='online'?'Реванш':'Новая партия';
+  $('newBtn').hidden=mode==='online'&&G.status!=='over';
   $('roomLine').innerHTML=mode==='online'&&room?'Комната <b>'+room+'</b> · <a href="#" id="leaveRoom" style="color:var(--muted)">выйти</a>':'';
   const lr=$('leaveRoom'); if(lr) lr.onclick=e=>{ e.preventDefault(); leaveRoom(); };
   const ov=$('over'); ov.hidden=G.status!=='over'||animating;
@@ -353,7 +361,7 @@ async function joinRoom(code,silent){ if(!db){ setErr('Онлайн недост
     if(!r.data){ if(!silent) setErr('Комната не найдена.'); else forgetRoom(); return; }
     const P=r.data.players||{}; if(!((P[1]&&P[1].id===uid)||(P[-1]&&P[-1].id===uid))){ setErr('В комнате уже два игрока.'); return; }
     enterRoom(code); }catch(e){ if(!silent) setErr('Не удалось войти.'); } }
-function enterRoom(code){ room=code; mode='online'; undo=[]; try{ localStorage.setItem('shashki-room',code); }catch(e){} history.replaceState(null,'','?room='+code);
+function enterRoom(code){ room=code; mode='online'; undo=[]; chatStart('shashkichat/'+code); try{ localStorage.setItem('shashki-room',code); }catch(e){} history.replaceState(null,'','?room='+code);
   if(unsub) unsub(); let prevSeq=-1;
   unsub=db.doc('shashki/'+code).onSnapshot(sn=>{ if(!sn.exists){ leaveRoom(true); return; } const d=sn.data(); roomData=d; const P=d.players||{};
     myColor=P[1]&&P[1].id===uid?1:P[-1]&&P[-1].id===uid?-1:0; const nf=myColor===-1; if(nf!==flip||!$('board').children.length){ flip=nf; buildBoard(); }
@@ -373,9 +381,33 @@ function pushOnline(mv){ const code=room, expect=G.seq-1;
   .then(r=>{ if(!r.ok&&r.data){ G=toG(r.data); render(); } }).catch(()=>{}); }
 function rematch(){ db.doc('shashki/'+room).mutate(o=>{ if(o.status!=='over') return; const P=o.players||{}; Object.assign(o,newGame(),{players:{'1':P[-1],'-1':P[1]},status:'play',seq:(o.seq||0)+1}); return o; }); }
 function forgetRoom(){ try{ localStorage.removeItem('shashki-room'); }catch(e){} }
-function leaveRoom(gone){ const wasWait=roomData&&roomData.status==='wait'; if(unsub){ unsub(); unsub=null; } const code=room; room=null; roomData=null; forgetRoom(); history.replaceState(null,'',location.pathname);
+function leaveRoom(gone){ const wasWait=roomData&&roomData.status==='wait'; if(unsub){ unsub(); unsub=null; } chatStop(); const code=room; room=null; roomData=null; forgetRoom(); history.replaceState(null,'',location.pathname);
   if(!gone&&code&&db&&wasWait) db.doc('shashki/'+code).delete().catch(()=>{});
   mode='ai'; myColor=0; flip=false; G=newGame(); undo=[]; buildBoard(); render(); openSetup(); }
+/* ---------- chat for online rooms (separate doc, last 60 messages) ---------- */
+let chatUnsub=null, chatRoomPath=null, chatSeen=0, chatPrimed=false;
+function chatStart(path){
+  chatStop(); chatRoomPath=path; chatPrimed=false; $('chatBox').hidden=false; $('chatList').innerHTML='<li class="ce">Сообщений пока нет — напишите сопернику</li>';
+  db.doc(path).get().then(sn=>{ if(!sn.exists) db.doc(path).set({msgs:[]}).catch(()=>{}); });
+  chatUnsub=db.doc(path).onSnapshot(sn=>{ const d=sn.exists?sn.data():null; chatRender(d&&Array.isArray(d.msgs)?d.msgs:[]); });
+}
+function chatStop(){ if(chatUnsub){ chatUnsub(); chatUnsub=null; } chatRoomPath=null; const b=$('chatBox'); if(b) b.hidden=true; }
+function chatRender(msgs){
+  const ul=$('chatList'); if(!msgs.length){ ul.innerHTML='<li class="ce">Сообщений пока нет — напишите сопернику</li>'; return; }
+  const atBottom=ul.scrollHeight-ul.scrollTop-ul.clientHeight<40;
+  ul.innerHTML=msgs.map(m=>{ const d=new Date(m.t); return '<li class="'+(m.id===uid?'me':'')+'"><b>'+(m.id===uid?'Вы':esc(m.name||'Соперник'))+'</b><time>'+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+'</time><span>'+esc(m.x)+'</span></li>'; }).join('');
+  if(atBottom||!chatPrimed) ul.scrollTop=ul.scrollHeight;
+  const lastOther=msgs.filter(m=>m.id!==uid).length;
+  if(chatPrimed&&lastOther>chatSeen) chatBlip();
+  chatSeen=lastOther; chatPrimed=true;
+}
+function chatSend(){
+  const inp=$('chatInput'), x=inp.value.trim().slice(0,200); if(!x||!chatRoomPath) return; inp.value='';
+  db.doc(chatRoomPath).mutate(o=>{ const msgs=Array.isArray(o.msgs)?o.msgs:[]; msgs.push({id:uid,name:myName||'Игрок',t:Date.now(),x}); o.msgs=msgs.slice(-60); return o; })
+    .then(r=>{ if(!r.ok&&!r.data) db.doc(chatRoomPath).set({msgs:[{id:uid,name:myName||'Игрок',t:Date.now(),x}]}); }).catch(()=>{ inp.value=x; });
+}
+function chatBlip(){ try{ const a=window.__chatCtx||(window.__chatCtx=new (window.AudioContext||window.webkitAudioContext)()); const t=a.currentTime, o=a.createOscillator(), g=a.createGain(); o.type='sine'; o.frequency.setValueAtTime(880,t); o.frequency.setValueAtTime(1180,t+0.07); g.gain.setValueAtTime(0.06,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.18); o.connect(g); g.connect(a.destination); o.start(t); o.stop(t+0.2); }catch(e){} }
+$('chatForm').addEventListener('submit',e=>{ e.preventDefault(); chatSend(); });
 /* ---------- setup ---------- */
 function showTab(t){ document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t)); $('tAi').hidden=t!=='ai'; $('tLocal').hidden=t!=='local'; $('tOnline').hidden=t!=='online'; if(t==='online'){ $('onLobby').hidden=!!room; $('onWait').hidden=!room; } }
 function openSetup(){ $('setup').hidden=false; showTab(mode==='online'?'online':mode); }

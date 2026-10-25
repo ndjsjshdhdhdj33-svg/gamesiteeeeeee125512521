@@ -74,6 +74,14 @@ input.t{width:100%;font:inherit;font-size:15px;padding:10px 12px;border-radius:1
 .fe span{flex:1;font-size:13.5px}.fe b{width:26px;text-align:center;font-size:16px}
 .fe button{width:30px;height:30px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font-size:17px;cursor:pointer}
 .finfo{font-size:12.5px;color:var(--muted);margin-bottom:12px}
+.chat{display:flex;flex-direction:column;gap:8px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:14px;max-width:640px;margin:16px auto 0}.card h3{margin:0;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.chat ul{list-style:none;margin:0;padding:0;max-height:220px;min-height:90px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.chat li{background:var(--panel2);border-radius:10px;padding:6px 9px;font-size:13.5px;line-height:1.35;display:grid;grid-template-columns:auto 1fr;column-gap:8px}
+.chat li b{font-size:12px}.chat li time{font-size:11px;color:var(--muted);justify-self:end}.chat li span{grid-column:1/3;word-break:break-word}
+.chat li.me{background:color-mix(in srgb,var(--accent) 22%,var(--panel2))}
+.chat li.ce{display:block;background:none;color:var(--muted);font-size:12.5px;text-align:center}
+.chat form{display:flex;gap:6px}.chat input{flex:1;min-width:0;font:inherit;font-size:14px;padding:9px 11px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--ink)}
 </style>
 </head>
 <body>
@@ -87,6 +95,7 @@ input.t{width:100%;font:inherit;font-size:15px;padding:10px 12px;border-radius:1
     <div class="bx enemy"><h2>Поле соперника <small id="enemyInfo"></small></h2><div class="gwrap"><div class="shiplayer" id="sEnemy"></div><div class="grid" id="gEnemy"></div></div><div class="fleet" id="fEnemy"></div></div>
   </div>
   <div class="row" style="justify-content:center;margin-top:14px;gap:10px"><button class="b" id="againBtn" type="button" hidden>Ещё партию</button><span class="finfo" id="roomLine"></span></div>
+  <div class="card chat" id="chatBox" hidden><h3>Чат</h3><ul id="chatList" aria-live="polite"></ul><form id="chatForm"><input id="chatInput" maxlength="200" placeholder="Сообщение…" autocomplete="off"><button class="b" type="submit">➤</button></form></div>
 </div>
 
 <div class="modal" id="setup">
@@ -200,7 +209,7 @@ function makeDb(){
   const docRef=path=>{ const parts=path.split('/'); const id=parts.pop(); return {id,ref:rt.ref('db/'+enc(parts.join('/'))+'/'+id)}; };
   const parse=v=>{ if(v==null||typeof v.json!=='string') return undefined; try{ return JSON.parse(v.json); }catch(e){ return undefined; } };
   return { doc(path){ const {id,ref}=docRef(path); const snap=v=>{ const d=parse(v); return {id,exists:d!==undefined,data:()=>d}; };
-    return { set:d=>ref.set({json:JSON.stringify(d),ts:Date.now()}), delete:()=>ref.remove(),
+    return { get:()=>ref.once('value').then(sn=>snap(sn.val())), set:d=>ref.set({json:JSON.stringify(d),ts:Date.now()}), delete:()=>ref.remove(),
       mutate:fn=>ref.transaction(cur=>{ const o=parse(cur); if(o===undefined) return cur; const r=fn(o); if(r===undefined) return; return {json:JSON.stringify(r),ts:Date.now()}; }).then(res=>({ok:res.committed,data:parse(res.snapshot.val())})),
       onSnapshot(next){ const cb=sn=>next(snap(sn.val())); ref.on('value',cb); return ()=>ref.off('value',cb); } }; } };
 }
@@ -363,7 +372,7 @@ async function joinRoom(code,silent){ if(!db){ setErr('Онлайн недост
     if(!r.data){ if(!silent) setErr('Комната не найдена.'); else forget(); return; } const P=r.data.players||{}; if(!((P.A&&P.A.id===uid)||(P.B&&P.B.id===uid))){ setErr('В комнате уже два игрока.'); return; }
     enterRoom(code); }catch(e){ if(!silent) setErr('Не удалось войти.'); } }
 function forget(){ try{ localStorage.removeItem('sea-room'); }catch(e){} }
-function enterRoom(code){ room=code; mode='online'; try{ localStorage.setItem('sea-room',code); }catch(e){} history.replaceState(null,'','?room='+code); resetGame();
+function enterRoom(code){ room=code; mode='online'; try{ localStorage.setItem('sea-room',code); }catch(e){} chatStart('seachat/'+code); history.replaceState(null,'','?room='+code); resetGame();
   if(unsub) unsub(); let built=false;
   unsub=db.doc('sea/'+code).onSnapshot(sn=>{ if(!sn.exists){ leaveRoom(true); return; } const d=sn.data(); roomData=d; const P=d.players||{};
     me=P.A&&P.A.id===uid?'A':P.B&&P.B.id===uid?'B':null; opp=me==='A'?'B':'A';
@@ -392,8 +401,32 @@ function answerShot(p){ if(answering) return; answering=true;
     if(res.all){ o.status='over'; o.winner=opp; } else if(res.res==='miss') o.turn=me; o.seq=(o.seq||0)+1; return o; }).finally(()=>{ answering=false; }); }
 function rematch(){ try{ localStorage.removeItem(shipsKey()); }catch(e){} myShips=[]; enemyShips=[];
   db.doc('sea/'+room).mutate(o=>{ if(o.status!=='over') return; o.status='place'; o.players.A.ready=false; o.players.B.ready=false; o.shots={A:[],B:[]}; o.pending=null; o.winner=null; o.reveal=null; o.seq=(o.seq||0)+1; return o; }); pickLen=fleetList(FLEET)[0]; }
-function leaveRoom(gone){ const wasWait=roomData&&roomData.status==='wait'; if(unsub){ unsub(); unsub=null; } const code=room; try{ localStorage.removeItem(shipsKey()); }catch(e){} room=null; roomData=null; forget(); history.replaceState(null,'',location.pathname);
+function leaveRoom(gone){ const wasWait=roomData&&roomData.status==='wait'; if(unsub){ unsub(); unsub=null; } chatStop(); const code=room; try{ localStorage.removeItem(shipsKey()); }catch(e){} room=null; roomData=null; forget(); history.replaceState(null,'',location.pathname);
   if(!gone&&code&&db&&wasWait) db.doc('sea/'+code).delete().catch(()=>{}); mode='ai'; resetGame(); openSetup(); }
+/* ---------- chat for online rooms (separate doc, last 60 messages) ---------- */
+let chatUnsub=null, chatRoomPath=null, chatSeen=0, chatPrimed=false;
+function chatStart(path){
+  chatStop(); chatRoomPath=path; chatPrimed=false; $('chatBox').hidden=false; $('chatList').innerHTML='<li class="ce">Сообщений пока нет — напишите сопернику</li>';
+  db.doc(path).get().then(sn=>{ if(!sn.exists) db.doc(path).set({msgs:[]}).catch(()=>{}); });
+  chatUnsub=db.doc(path).onSnapshot(sn=>{ const d=sn.exists?sn.data():null; chatRender(d&&Array.isArray(d.msgs)?d.msgs:[]); });
+}
+function chatStop(){ if(chatUnsub){ chatUnsub(); chatUnsub=null; } chatRoomPath=null; const b=$('chatBox'); if(b) b.hidden=true; }
+function chatRender(msgs){
+  const ul=$('chatList'); if(!msgs.length){ ul.innerHTML='<li class="ce">Сообщений пока нет — напишите сопернику</li>'; return; }
+  const atBottom=ul.scrollHeight-ul.scrollTop-ul.clientHeight<40;
+  ul.innerHTML=msgs.map(m=>{ const d=new Date(m.t); return '<li class="'+(m.id===uid?'me':'')+'"><b>'+(m.id===uid?'Вы':esc(m.name||'Соперник'))+'</b><time>'+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+'</time><span>'+esc(m.x)+'</span></li>'; }).join('');
+  if(atBottom||!chatPrimed) ul.scrollTop=ul.scrollHeight;
+  const lastOther=msgs.filter(m=>m.id!==uid).length;
+  if(chatPrimed&&lastOther>chatSeen) chatBlip();
+  chatSeen=lastOther; chatPrimed=true;
+}
+function chatSend(){
+  const inp=$('chatInput'), x=inp.value.trim().slice(0,200); if(!x||!chatRoomPath) return; inp.value='';
+  db.doc(chatRoomPath).mutate(o=>{ const msgs=Array.isArray(o.msgs)?o.msgs:[]; msgs.push({id:uid,name:myName||'Игрок',t:Date.now(),x}); o.msgs=msgs.slice(-60); return o; })
+    .then(r=>{ if(!r.ok&&!r.data) db.doc(chatRoomPath).set({msgs:[{id:uid,name:myName||'Игрок',t:Date.now(),x}]}); }).catch(()=>{ inp.value=x; });
+}
+function chatBlip(){ try{ const a=window.__chatCtx||(window.__chatCtx=new (window.AudioContext||window.webkitAudioContext)()); const t=a.currentTime, o=a.createOscillator(), g=a.createGain(); o.type='sine'; o.frequency.setValueAtTime(880,t); o.frequency.setValueAtTime(1180,t+0.07); g.gain.setValueAtTime(0.06,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.18); o.connect(g); g.connect(a.destination); o.start(t); o.stop(t+0.2); }catch(e){} }
+$('chatForm').addEventListener('submit',e=>{ e.preventDefault(); chatSend(); });
 /* ---------- setup ---------- */
 function showTab(t){ document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t)); $('tAi').hidden=t!=='ai'; $('tOnline').hidden=t!=='online'; if(t==='online'){ $('onLobby').hidden=!!room; $('onWait').hidden=!room; } }
 function openSetup(){ $('setup').hidden=false; syncSizeBtns(); renderFleetEditor(); showTab(mode); }
