@@ -132,7 +132,7 @@ const WEAPONS=[
   {id:'sniper',name:'Снайперка',ic:'🎯',ammo:2,charge:false,desc:'пробивает стены насквозь, 50 урона'},
   {id:'laser',name:'Лазер',ic:'🔦',ammo:1,charge:false,desc:'луч прожигает землю насквозь'},
   {id:'flame',name:'Огнемёт',ic:'🔥',ammo:2,charge:false,desc:'струя огня вблизи, до 30 урона'},
-  {id:'bat',name:'Бита',ic:'⚾',ammo:1,charge:false,desc:'мощный удар — выбивает соседа с карты'},
+  {id:'bat',name:'Бита',ic:'⚾',ammo:1,charge:false,desc:'мощный удар — откидывает соседа'},
   {id:'dynamite',name:'Динамит',ic:'🧨',ammo:1,charge:false,desc:'кладётся под ноги, мощный взрыв через 4 с'},
   {id:'air',name:'Авиаудар',ic:'✈️',ammo:1,charge:false,target:true,desc:'клик по карте — пять бомб сверху'},
   {id:'drill',name:'Бур',ic:'⛏️',ammo:2,charge:false,desc:'прокопать яму вниз и спрятаться'},
@@ -418,9 +418,10 @@ function fire(){
   else if(w.id==='uzi'){ use(w); burst={kind:'uzi',n:12,t:0,iv:0.07}; phase='firing'; }
   else if(w.id==='flame'){ use(w); fireDealt=new Map(); burst={kind:'flame',n:30,t:0,iv:0.045}; phase='firing'; }
   else if(w.id==='drill'){ use(w); burst={kind:'drill',n:18,t:0,iv:0.09}; phase='firing'; say('⛏️ Копаем!'); }
-  else if(w.id==='sniper'){ use(w); popSnd(70); shake+=6; const hit=ray(u,aimA,1700,true); tracer(u,hit,'rgba(255,255,255,.95)',2.5); let n=0;
+  else if(w.id==='sniper'){ use(w); popSnd(70); shake+=6; const hit=ray(u,aimA,1700,true,true); tracer(u,hit,'rgba(255,255,255,.95)',2.5); let n=0;
     hit.walls.forEach(([x0,y0,x1,y1])=>{ const L=Math.hypot(x1-x0,y1-y0); for(let d=0;d<=L&&n<40;d+=9){ const cx=Math.round(x0+(x1-x0)*(L?d/L:0)), cy=Math.round(y0+(y1-y0)*(L?d/L:0)); craters.push([cx,cy,5]); carve(cx,cy,5); n++; } for(let k=0;k<5;k++) parts.push({x:x0,y:y0,vx:rnd(-80,80),vy:rnd(-120,0),life:0.5,c:M.dirt||'#6e4428',r:2,dirt:1}); });
-    if(hit.unit){ const o=hit.unit; o.hp-=50; o.hit=1; floats.push({x:o.x,y:o.y-24,t:1.4,txt:'-50',c:TEAMS[o.team].col}); o.vx+=Math.cos(aimA)*260; o.vy+=Math.sin(aimA)*260-120; o.ground=false; parts.push({x:o.x,y:o.y,vx:0,vy:0,life:0.25,flash:16}); boomSnd(false); renderTeams(); }
+    hit.units.forEach(o=>{ o.hp-=50; o.hit=1; floats.push({x:o.x,y:o.y-24,t:1.4,txt:'-50',c:TEAMS[o.team].col}); o.vx+=Math.cos(aimA)*260; o.vy+=Math.sin(aimA)*260-120; o.ground=false; parts.push({x:o.x,y:o.y,vx:0,vy:0,life:0.25,flash:16}); });
+    if(hit.units.length){ boomSnd(false); renderTeams(); if(hit.units.length>1) say('🎯 Прострел '+hit.units.length+' за раз!'); }
     afterShot(); }
   else if(w.id==='laser'){ use(w); laser(u); afterShot(); }
   else if(w.id==='bat'){ use(w); bat(u); afterShot(); }
@@ -431,9 +432,9 @@ function shotgun(u){ popSnd(90); shake+=4; let x=u.x+Math.cos(aimA)*14, y=u.y-4+
   for(let i=0;i<900;i++){ x+=dx*2; y+=dy*2; if(x<0||x>W||y<0||y>H) return; const hit=units.find(o=>o.alive&&o!==u&&Math.hypot(o.x-x,o.y-y)<R+2);
     if(hit||solid(x,y)){ explode(x,y,16,22,220); return; } } }
 function use(w){ if(ammo[teamTurn][w.id]!==Infinity) ammo[teamTurn][w.id]--; }
-function ray(u,ang,range,pierce){ let x=u.x+Math.cos(ang)*14, y=u.y-4+Math.sin(ang)*14; const dx=Math.cos(ang), dy=Math.sin(ang), walls=[]; let inWall=false;
-  for(let i=0;i<range/2;i++){ x+=dx*2; y+=dy*2; if(x<0||x>W||y<0||y>H+20) return {x,y,hit:false,walls}; const o=units.find(o=>o.alive&&o!==u&&Math.hypot(o.x-x,o.y-y)<R+2); if(o) return {x,y,hit:true,unit:o,walls};
-    const s=solid(x,y); if(s&&!pierce) return {x,y,hit:true,walls}; if(s&&!inWall) walls.push([x,y,x,y]); if(s) { walls[walls.length-1][2]=x; walls[walls.length-1][3]=y; } inWall=s; } return {x,y,hit:false,walls}; }
+function ray(u,ang,range,pierce,thru){ let x=u.x+Math.cos(ang)*14, y=u.y-4+Math.sin(ang)*14; const dx=Math.cos(ang), dy=Math.sin(ang), walls=[], units2=[]; let inWall=false;
+  for(let i=0;i<range/2;i++){ x+=dx*2; y+=dy*2; if(x<0||x>W||y<0||y>H+20) return {x,y,hit:units2.length>0,walls,units:units2}; const o=units.find(o=>o.alive&&o!==u&&Math.hypot(o.x-x,o.y-y)<R+2&&!units2.includes(o)); if(o&&!thru) return {x,y,hit:true,unit:o,walls}; if(o) units2.push(o);
+    const s=solid(x,y); if(s&&!pierce) return {x,y,hit:true,walls}; if(s&&!inWall) walls.push([x,y,x,y]); if(s) { walls[walls.length-1][2]=x; walls[walls.length-1][3]=y; } inWall=s; } return {x,y,hit:units2.length>0,walls,units:units2}; }
 function tracer(u,h,col,w){ parts.push({tracer:[u.x+Math.cos(aimA)*14,u.y-4+Math.sin(aimA)*14,h.x,h.y],c:col,w:w||2,life:0.3,max:0.3}); }
 let burst=null, fireDealt=new Map();
 function doBurst(u){ const b=burst;
@@ -442,11 +443,11 @@ function doBurst(u){ const b=burst;
   else if(b.kind==='drill'){ const x=Math.round(u.x), y=Math.round(u.y+R+2); craters.push([x,y,12]); carve(x,y,12); u.ground=false; for(let i=0;i<3;i++) parts.push({x:x+rnd(-8,8),y,vx:rnd(-90,90),vy:rnd(-160,-60),life:0.6,c:M.dirt||'#6e4428',r:rnd(2,3.5),dirt:1}); popSnd(80); }
 }
 function laser(u){ const dx=Math.cos(aimA), dy=Math.sin(aimA); let x=u.x+dx*14, y=u.y-4+dy*14; const hitU=new Set(); popSnd(1200); shake+=5;
-  for(let i=0;i<320;i++){ x+=dx*2.5; y+=dy*2.5; if(x<0||x>W||y<0||y>H) break; units.forEach(o=>{ if(o.alive&&o!==u&&Math.hypot(o.x-x,o.y-y)<R+4) hitU.add(o); }); if(i%5===0&&solid(x,y)){ const cx=Math.round(x), cy=Math.round(y); craters.push([cx,cy,9]); carve(cx,cy,9); } }
+  for(let i=0;i<700;i++){ x+=dx*2.5; y+=dy*2.5; if(x<0||x>W||y<0||y>H) break; units.forEach(o=>{ if(o.alive&&o!==u&&Math.hypot(o.x-x,o.y-y)<R+4) hitU.add(o); }); if(i%5===0&&solid(x,y)){ const cx=Math.round(x), cy=Math.round(y); craters.push([cx,cy,9]); carve(cx,cy,9); } }
   parts.push({tracer:[u.x+dx*14,u.y-4+dy*14,x,y],c:'rgba(255,60,90,.95)',w:6,life:0.5,max:0.5});
-  hitU.forEach(o=>{ o.hp-=35; o.hit=1; floats.push({x:o.x,y:o.y-24,t:1.4,txt:'-35',c:TEAMS[o.team].col}); o.vx+=dx*160; o.vy+=dy*160-80; o.ground=false; }); renderTeams(); }
+  if(hitU.size>1) say('🔦 Прожёг '+hitU.size+' за раз!'); hitU.forEach(o=>{ o.hp-=35; o.hit=1; floats.push({x:o.x,y:o.y-24,t:1.4,txt:'-35',c:TEAMS[o.team].col}); o.vx+=dx*160; o.vy+=dy*160-80; o.ground=false; }); renderTeams(); }
 function bat(u){ popSnd(240); const dx=Math.cos(aimA), dy=Math.sin(aimA); let any=false;
-  units.forEach(o=>{ if(!o.alive||o===u) return; const rx=o.x-u.x, ry=o.y-u.y; if(Math.hypot(rx,ry)<40&&rx*dx+ry*dy>-6){ any=true; o.hp-=30; o.hit=1; floats.push({x:o.x,y:o.y-24,t:1.4,txt:'-30',c:TEAMS[o.team].col}); const sx=Math.abs(dx)<0.35?(rx>=0?1:-1)*0.35:dx; o.vx=sx*820; o.vy=Math.min(dy*820,-420); o.y-=4; o.ground=false; o.fall=0; o.spin=sx>0?1:-1; for(let k=0;k<14;k++) parts.push({x:o.x,y:o.y,vx:rnd(-120,120),vy:rnd(-160,40),life:0.5,c:'#fff3b0',r:rnd(1.5,3)}); } });
+  units.forEach(o=>{ if(!o.alive||o===u) return; const rx=o.x-u.x, ry=o.y-u.y; if(Math.hypot(rx,ry)<40&&rx*dx+ry*dy>-6){ any=true; o.hp-=30; o.hit=1; floats.push({x:o.x,y:o.y-24,t:1.4,txt:'-30',c:TEAMS[o.team].col}); const sx=Math.abs(dx)<0.35?(rx>=0?1:-1)*0.35:dx; o.vx=sx*330; o.vy=Math.min(dy*330,-250); o.y-=4; o.ground=false; o.fall=0; o.spin=sx>0?1:-1; for(let k=0;k<14;k++) parts.push({x:o.x,y:o.y,vx:rnd(-120,120),vy:rnd(-160,40),life:0.5,c:'#fff3b0',r:rnd(1.5,3)}); } });
   parts.push({x:u.x+dx*18,y:u.y-4+dy*18,vx:0,vy:0,life:0.2,flash:22}); if(any){ shake+=8; boomSnd(false); say('⚾ Хоум-ран!'); } else say('Мимо!'); renderTeams(); }
 function afterShot(){ phase='retreat'; retreat=3; renderWeap(); }
 function targetClick(wx,wy){
@@ -611,7 +612,7 @@ function draw(time){
   ctx.drawImage(terr,0,0); drawGlows(time);
   /* aim helper */
   const u=units[cur];
-  if(u&&u.alive&&phase==='aim'&&WEAPONS[weapon].id==='sniper'&&!notMe()){ const hh=ray(u,aimA,1700,true); ctx.strokeStyle='rgba(255,40,40,.55)'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(u.x+Math.cos(aimA)*14,u.y-4+Math.sin(aimA)*14); ctx.lineTo(hh.x,hh.y); ctx.stroke(); ctx.fillStyle='rgba(255,40,40,.9)'; circ(ctx,hh.x,hh.y,2.5); }
+  if(u&&u.alive&&phase==='aim'&&WEAPONS[weapon].id==='sniper'&&!notMe()){ const hh=ray(u,aimA,1700,true,true); ctx.strokeStyle='rgba(255,40,40,.55)'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(u.x+Math.cos(aimA)*14,u.y-4+Math.sin(aimA)*14); ctx.lineTo(hh.x,hh.y); ctx.stroke(); ctx.fillStyle='rgba(255,40,40,.9)'; circ(ctx,hh.x,hh.y,2.5); }
   if(u&&u.alive&&phase==='aim'&&!WEAPONS[weapon].target&&!['skip','dynamite','drill'].includes(WEAPONS[weapon].id)){
     const cx=u.x+Math.cos(aimA)*60, cy=u.y-4+Math.sin(aimA)*60; ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.arc(cx,cy,9,0,7); ctx.moveTo(cx-14,cy); ctx.lineTo(cx+14,cy); ctx.moveTo(cx,cy-14); ctx.lineTo(cx,cy+14); ctx.stroke();
     if(charging||power>0){ ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.lineWidth=8; ctx.beginPath(); ctx.moveTo(u.x+Math.cos(aimA)*18,u.y-4+Math.sin(aimA)*18); ctx.lineTo(u.x+Math.cos(aimA)*(18+80),u.y-4+Math.sin(aimA)*(18+80)); ctx.stroke();
