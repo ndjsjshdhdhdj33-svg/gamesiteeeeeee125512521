@@ -696,8 +696,8 @@ document.fonts&&document.fonts.ready.then(()=>{ handKey=''; drawBg(); render(tru
 <script>
 /* ===== Игротека: общее лобби сайта (party) ===== */
 const PARTY=(()=>{
-  const GAMES={mashinki:'Машинки',shashki:'Русские шашки','morskoy-boy':'Морской бой',bombohomyaki:'Бомбохомяки','blef-bar':'Блеф-бар',tanchiki:'Танчики'};
-  const ROOMKEY={mashinki:'mashinki-room',shashki:'shashki-room','morskoy-boy':'sea-room',bombohomyaki:'hamsters-room','blef-bar':'bluff-room',tanchiki:'tanks-room'};
+  const GAMES={mashinki:'Машинки',shashki:'Русские шашки','morskoy-boy':'Морской бой',bombohomyaki:'Бомбохомяки','blef-bar':'Блеф-бар',tanchiki:'Танчики',durak:'Дурак'};
+  const ROOMKEY={mashinki:'mashinki-room',shashki:'shashki-room','morskoy-boy':'sea-room',bombohomyaki:'hamsters-room','blef-bar':'bluff-room',tanchiki:'tanks-room',durak:'durak-room'};
   const ls={ get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }, set(k,v){ try{ v==null?localStorage.removeItem(k):localStorage.setItem(k,v); }catch(e){} } };
   let rt=null, db=null;
   try{ if(window.firebase&&window.FIREBASE_CONFIG&&window.FIREBASE_CONFIG.databaseURL){ const app=firebase.apps.length?firebase.app():firebase.initializeApp(window.FIREBASE_CONFIG); rt=app.database(); } }catch(e){ console.error(e); }
@@ -711,6 +711,7 @@ const PARTY=(()=>{
   const genCode=()=>{ const a='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<4;i++) s+=a[Math.floor(Math.random()*a.length)]; return s; };
   async function create(nm){ if(!db) throw new Error('offline'); ls.set('mashinki-name',nm); let c; for(let k=0;k<5;k++){ c=genCode(); const sn=await db.doc('party/'+c).get(); if(!sn.exists) break; }
     await db.doc('party/'+c).set({leader:uid,members:[{id:uid,name:nm,t:Date.now()}],go:null,created:Date.now()}); ls.set('party-code',c); return c; }
+  function setCode(c){ ls.set('party-code',c); }
   async function join(c,nm){ if(!db) throw new Error('offline'); c=String(c||'').toUpperCase().replace(/[^A-Z0-9]/g,''); if(c.length!==4) throw new Error('code'); if(nm) ls.set('mashinki-name',nm);
     const r=await db.doc('party/'+c).mutate(o=>{ o.members=o.members||[]; const me=o.members.find(m=>m.id===uid); if(me){ me.name=nm||me.name; me.t=Date.now(); return o; } if(o.members.length>=8) return o; o.members.push({id:uid,name:nm||'Игрок',t:Date.now()}); if(!o.leader) o.leader=uid; return o; });
     if(!r.data) throw new Error('nf'); if(!r.data.members.some(m=>m.id===uid)) throw new Error('full'); ls.set('party-code',c); return c; }
@@ -718,13 +719,13 @@ const PARTY=(()=>{
     await db.doc('party/'+c).mutate(o=>{ o.members=(o.members||[]).filter(m=>m.id!==uid); if(!o.members.length) return {dead:1,members:[],leader:null,go:null}; if(o.leader===uid){ const alive=o.members.slice().sort((a,b)=>b.t-a.t); o.leader=alive[0].id; } return o; }).catch(()=>{}); }
   function beat(){ const c=code(); if(!db||!c) return; db.doc('party/'+c).mutate(o=>{ const me=(o.members||[]).find(m=>m.id===uid); if(!me) return; me.t=Date.now(); if(name()) me.name=name(); const lead=(o.members||[]).find(m=>m.id===o.leader); if(!lead||Date.now()-lead.t>150000){ const alive=o.members.filter(m=>Date.now()-m.t<90000).sort((a,b)=>a.t-b.t); if(alive.length&&alive[0].id!==o.leader) o.leader=alive[0].id; } return o; }).catch(()=>{}); }
   function setGo(game,room){ const c=code(); if(!db||!c) return Promise.resolve(); return db.doc('party/'+c).mutate(o=>{ if(o.leader!==uid) return; if(o.go&&o.go.game===game&&o.go.room===room) return; o.go={game,room:room||null,t:Date.now(),by:uid}; return o; }).catch(()=>{}); }
-  function watch(cb){ const c=code(); if(!db||!c) return ()=>{}; let chk=null;
+  function watch(cb,cc){ const c=cc||code(); if(!db||!c) return ()=>{}; let chk=null;
     return db.doc('party/'+c).onSnapshot(sn=>{ const d=sn.exists?sn.data():null; clearTimeout(chk);
       if(d&&!d.dead&&(d.members||[]).some(m=>m.id===uid)){ cb(d); return; }
       /* a missing doc can be a momentary blip: confirm with the server before giving up */
       chk=setTimeout(()=>db.doc('party/'+c).get().then(s2=>{ const d2=s2.exists?s2.data():null; if(!d2||d2.dead||!(d2.members||[]).some(m=>m.id===uid)) cb(null); else cb(d2); }).catch(()=>{}),1500); }); }
   const online=m=>Date.now()-(m.t||0)<75000;
-  return {GAMES,ROOMKEY,db,uid,code,name,create,join,leave,beat,setGo,watch,online,ls};
+  return {GAMES,ROOMKEY,db,uid,code,name,create,join,leave,beat,setGo,watch,online,ls,setCode};
 })();
 
 /* ===== лобби сайта внутри игры: следовать за лидером / публиковать комнату лидера ===== */
