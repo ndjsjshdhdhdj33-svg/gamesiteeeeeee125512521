@@ -310,6 +310,7 @@ body.chatonly #cwPop{display:none!important}
       <div class="phone" id="phone" hidden><div class="ph-top"><div class="ph-tabs"><button type="button" data-g="race" class="on">Гонки</button><button type="button" data-g="drift">Дрифт</button></div><button type="button" id="pgClose" aria-label="Закрыть телефон">✕</button></div><div class="pg-turn" id="pgTurn" hidden>Твой ход! Закрой телефон</div><canvas id="pgCv" width="240" height="400" aria-label="Мини-игра: гонка по трём полосам"></canvas><div class="ph-ctrl"><button type="button" id="pgL" aria-label="Влево">◀</button><button type="button" id="pgR" aria-label="Вправо">▶</button></div><div class="ph-hint" id="pgHint">← → или A / D · тап слева / справа</div></div><div class="choice-modal" id="choiceModal" hidden><div class="cm-card" role="dialog" aria-live="polite"><div class="cm-t"></div><div class="cm-s"></div><div class="cm-list"></div></div></div><div class="bgfx" id="bgfx"></div><div class="moonlane" id="moon" hidden><i class="moon"></i></div><canvas id="cv" aria-label="Игровое поле"></canvas>
       <div class="tlbar">
       <button class="ovbtn" id="phoneBtn" type="button" title="Мини-игра, пока ждёте ход">📱 Игра</button>
+      <button class="ovbtn" id="shootBtn" type="button" hidden title="Выстрел танка: наведите на машину соперника и нажмите ЛКМ+ПКМ, или нажмите кнопку и коснитесь цели">🎯 Выстрел</button>
       <button class="ovbtn" id="gearBtn" type="button" aria-expanded="false" aria-controls="drawer" aria-label="Настройки"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span>Настройки</span></button>
       <button class="ovbtn" id="camBtn" type="button" aria-label="Сбросить камеру"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/></svg><span>Сбросить камеру</span></button>
       <button class="ovbtn" id="zoomIn" type="button" aria-label="Приблизить" title="Приблизить"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
@@ -609,9 +610,10 @@ function needName(errId){
 }
 const slots=['human','bot','bot','off'];
 const slotCars=['sport','jeep','pickup','formula'];
+function syncTankOpts(){ for(let i=0;i<4;i++){ const cs=document.getElementById('slotCar'+i); if(!cs) continue; const op=cs.querySelector('option[value="tank"]'); if(op){ const t=slotCars.some((c,j)=>j!==i&&c==='tank'); op.disabled=t; op.textContent=t?'Танк — уже занят':CAR_TYPES_LIST.tank; } } }
 const slotColors=[0,1,2,3];
 const colorOptions=()=>PALETTE.map((c,k)=>'<option value="'+k+'">'+c.name+'</option>').join('');
-const CAR_TYPES_LIST={sport:'Спорткар',jeep:'Джип',pickup:'Пикап',van:'Фургон',formula:'Болид'};
+const CAR_TYPES_LIST={sport:'Спорткар',jeep:'Джип',pickup:'Пикап',van:'Фургон',formula:'Болид',tank:'Танк (только один)'};
 const carOptions=()=>Object.keys(CAR_TYPES_LIST).map(k=>'<option value="'+k+'">'+CAR_TYPES_LIST[k]+'</option>').join('');
 let botTimer=null;
 
@@ -741,6 +743,20 @@ function bump(s,ci){
     }
   });
 }
+/* ---- танк: выстрел по машине соперника (раз в 3 своих хода, до броска кубика) ---- */
+const TANK_CD=3;
+const isTank=(s,p)=>!!s.players[p]&&s.players[p].car==='tank';
+function tankShooter(s,p){ let best=-1,bd=-1; s.cars.forEach((c,i)=>{ if(c.p!==p||c.done) return; const w=where(s,c); if(w.k==='ring'&&c.dist>bd){ bd=c.dist; best=i; } }); return best; }
+function tankReady(s,p){ return s.status==='play'&&s.cur===p&&s.phase==='roll'&&isTank(s,p)&&!((s.tankCd||{})[p]>0)&&tankShooter(s,p)>=0; }
+function tankTargets(s,p){ return s.cars.map((o,i)=>i).filter(i=>{ const o=s.cars[i]; return o.p!==p&&!o.done&&where(s,o).k==='ring'; }); }
+function doShoot(s,p,oi){ if(!tankReady(s,p)||!tankTargets(s,p).includes(oi)) return false;
+  const from=tankShooter(s,p), o=s.cars[oi]; s.tankCd=s.tankCd||{}; s.tankCd[p]=TANK_CD;
+  if(o.shield>0){ o.shield=0; s.events.push({t:'shot',from,to:oi,hit:false}); s.log.unshift(team(s,p)+': выстрел танка — щит '+carLabel(s,oi)+' отразил снаряд'); say(s,'Бах! Щит '+carLabel(s,oi)+' отразил снаряд танка.'); return true; }
+  s.events.push({t:'shot',from,to:oi,hit:true}); o.light=false; o.police=false;
+  if(o.dist<=4){ o.dist=0; s.events.push({t:'knock',car:oi,to:0}); s.log.unshift(team(s,p)+': танк подбивает '+carLabel(s,oi)+' — та в гараже'); say(s,'Бабах! Танк подбивает '+carLabel(s,oi)+', машина уезжает в гараж.'); }
+  else { const path=[]; for(let k=0;k<4;k++){ o.dist--; path.push(o.dist); } s.events.push({t:'knock',car:oi,to:o.dist,path}); s.log.unshift(team(s,p)+': танк отбрасывает '+carLabel(s,oi)+' на 4 клетки'); say(s,'Бабах! Танк отбрасывает '+carLabel(s,oi)+' на 4 клетки назад. Теперь бросайте кубик.'); }
+  return true; }
+function botTankTarget(s,p){ const t=tankTargets(s,p).filter(i=>!(s.cars[i].shield>0)); if(!t.length) return null; t.sort((a,b)=>s.cars[b].dist-s.cars[a].dist); return s.cars[t[0]].dist>=3?t[0]:null; }
 /* in the finish lane every car needs its own cell: slide forward past teammates */
 function settleLane(s,ci){
   const c=s.cars[ci], path=[];
@@ -978,6 +994,7 @@ function endTurn(s,extra){
     if(s.skip[s.cur]>0){ s.skip[s.cur]--; s.log.unshift(team(s,s.cur)+' пропускают ход'); continue; }
     break;
   }
+  if(s.tankCd&&s.tankCd[s.cur]>0) s.tankCd[s.cur]--;
   tickBombs(s);
 }
 function botPick(s){
@@ -1064,6 +1081,8 @@ function cryptoRoll(){
 let getRoll=async()=>({v:cryptoRoll(),src:'local'});
 let USES_RANDOM_ORG=false;
 let rollingNow=false;
+function actShoot(oi,fromBot){ if(!myTurn(fromBot)||!tankReady(S,S.cur)||!tankTargets(S,S.cur).includes(oi)) return false; aimMode=false; commit(s=>{ doShoot(s,s.cur,oi); }); return true; }
+let aimMode=false;
 async function actRoll(fromBot){
   if(!myTurn(fromBot)||S.phase!=='roll'||rollingNow) return;
   rollingNow=true; $('rollBtn').disabled=true;
@@ -1146,6 +1165,7 @@ function scheduleBot(){
   const seq=S.seq;
   botTimer=setTimeout(()=>{
     if(S.seq!==seq||animating) return;
+    if(S.phase==='roll'&&tankReady(S,S.cur)&&botTankTarget(S,S.cur)!=null&&Math.random()<0.8){ actShoot(botTankTarget(S,S.cur),true); return; }
     if(S.phase==='roll') actRoll(true); else if(S.phase==='pickdie') actPickDie(botDie(S),true); else if(S.phase==='curse') actCurse(botCurse(S),true); else if(S.phase==='buff') actBuff(botBuff(S),true); else if(S.phase==='swap') actSwap(botSwap(S),true); else actChoose(botPick(S),true);
   },reduce?300:1100);
 }
@@ -1918,7 +1938,19 @@ function carModel(hex,type){
   const wheels=(r,w,xs,zs,y)=>{ const wg=new THREE.CylinderGeometry(r,r,w,16), rg=new THREE.CylinderGeometry(r*0.52,r*0.52,w+0.004,10);
     xs.forEach(x=>zs.forEach(z=>{ add(wg,tyre,x,y,z).rotation.x=Math.PI/2; add(rg,rim,x,y,z).rotation.x=Math.PI/2; })); };
   const lights=(xf,xb,y,zs)=>zs.forEach(z=>{ box(0.02,0.04,0.07,hl,xf,y,z); box(0.02,0.035,0.07,tl,xb,y,z); });
-  if(type==='jeep'){
+  let turret=null;
+  if(type==='tank'){
+    const olive=mat({color:hex,roughness:.55,metalness:.15});
+    box(0.6,0.11,0.32,olive,0,0.17,0); const front=box(0.12,0.08,0.32,olive,0.31,0.16,0); front.rotation.z=-0.5;
+    [-0.18,0.18].forEach(z=>{ box(0.68,0.11,0.085,tyre,0,0.075,z); box(0.66,0.02,0.09,dark,0,0.135,z); [-0.25,-0.12,0,0.12,0.25].forEach(x=>{ add(new THREE.CylinderGeometry(0.045,0.045,0.095,12),rim,x,0.07,z).rotation.x=Math.PI/2; }); });
+    turret=new THREE.Group(); turret.position.set(-0.04,0.23,0); body.add(turret);
+    const tadd=(geo,m,x,y,z)=>{ const o=new THREE.Mesh(geo,m); o.position.set(x,y,z); o.castShadow=true; turret.add(o); return o; };
+    tadd(new THREE.BoxGeometry(0.26,0.1,0.24),olive,0,0.05,0); tadd(new THREE.BoxGeometry(0.2,0.03,0.2),dark,-0.01,0.115,0);
+    tadd(new THREE.CylinderGeometry(0.045,0.045,0.03,14),dark,-0.04,0.14,0.05);
+    const brl=tadd(new THREE.CylinderGeometry(0.024,0.028,0.38,12),dark,0.3,0.06,0); brl.rotation.z=Math.PI/2;
+    tadd(new THREE.CylinderGeometry(0.036,0.036,0.06,12),dark,0.48,0.06,0).rotation.z=Math.PI/2;
+    box(0.02,0.035,0.06,hl,0.36,0.17,-0.1); box(0.02,0.035,0.06,hl,0.36,0.17,0.1);
+  } else if(type==='jeep'){
     box(0.62,0.18,0.36,paint,0,0.22,0);
     box(0.36,0.16,0.33,dark,-0.05,0.39,0);
     box(0.38,0.03,0.35,paint,-0.05,0.48,0);
@@ -1959,7 +1991,7 @@ function carModel(hex,type){
   }
   const ring=new THREE.Mesh(new THREE.RingGeometry(0.42,0.49,40),new THREE.MeshBasicMaterial({color:lin('#ffffff'),transparent:true,opacity:0,depthWrite:false}));
   ring.rotation.x=-Math.PI/2; ring.position.y=0.015; g.add(ring);
-  g.userData={ring}; return g;
+  g.userData={ring,turret}; return g;
 }
 function buildCars(){
   cars3d.forEach(o=>{ if(o.g){ scene.remove(o.g); disposeTree(o.g); } });
@@ -2058,6 +2090,7 @@ async function playEvents(evs){
       await sleep(560);
       if(disp[e.car]) disp[e.car].dist=(e.to==null?0:e.to); relayout(false); await sleep(520);
     }
+    else if(e.t==='shot'){ await shotAnim(e.from,e.to,e.hit); }
     else if(e.t==='flash'){ const m=tiles[e.cell]; if(m) m.userData.flash=performance.now(); await sleep(550); }
   }
   await sleep(450);
@@ -2264,7 +2297,7 @@ function renderSetup(){
       d.innerHTML='<span class="sw" id="slotSw'+i+'" style="background:'+c.hex+'"></span><select id="slot'+i+'" aria-label="Игрок '+(i+1)+'"><option value="human">Игрок '+(i+1)+' — человек</option><option value="bot">Игрок '+(i+1)+' — компьютер</option><option value="off">Игрок '+(i+1)+' — не играет</option></select><select id="slotCar'+i+'" aria-label="Машина игрока '+(i+1)+'">'+carOptions()+'</select><select id="slotCol'+i+'" aria-label="Цвет игрока '+(i+1)+'">'+colorOptions()+'</select>';
       box.appendChild(d);
       const sel=d.querySelector('select'); sel.value=slots[i]; sel.onchange=()=>{ slots[i]=sel.value; $('localErr').textContent=''; syncSlotColors(); };
-      const cs=$('slotCar'+i); cs.value=slotCars[i]; cs.onchange=()=>{ slotCars[i]=cs.value; };
+      const cs=$('slotCar'+i); cs.value=slotCars[i]; cs.onchange=()=>{ if(cs.value==='tank'&&slotCars.some((c,j)=>j!==i&&c==='tank')){ cs.value=slotCars[i]; $('localErr').textContent='Танк может быть только у одного игрока.'; return; } slotCars[i]=cs.value; $('localErr').textContent=''; syncTankOpts(); };
       const cc=$('slotCol'+i); cc.onchange=()=>{ slotColors[i]=+cc.value; syncSlotColors(); };
     });
     syncSlotColors();
@@ -2275,7 +2308,8 @@ function setMyCar(type){
   try{ localStorage.setItem('mashinki-car',type); }catch(e){}
   if(mode!=='online'||S.status!=='lobby') return;
   const me=S.players.find(p=>p.id===uid); if(!me||me.car===type) return;
-  commit(s=>{ const p=s.players.find(x=>x.id===uid); if(p) p.car=type; });
+  if(type==='tank'&&S.players.some(p=>p.id!==uid&&p.car==='tank')){ renderLobby(); try{ $('onlineErr').textContent='Танк уже взял другой игрок — он может быть только у одного.'; }catch(e){} return; }
+  commit(s=>{ const p=s.players.find(x=>x.id===uid); if(!p) return; if(type==='tank'&&s.players.some(q=>q!==p&&q.car==='tank')) return; p.car=type; });
 }
 let carPrefApplied=false, colorPrefApplied=false;
 function setMyColor(ci){
@@ -2290,7 +2324,7 @@ function renderLobby(){
   const mc=$('myCar'); if(!mc.childElementCount) mc.innerHTML=carOptions();
   const me=S.players.find(p=>p.id===uid);
   if(me&&!me.car&&!carPrefApplied){ carPrefApplied=true; let pref=null; try{ pref=localStorage.getItem('mashinki-car'); }catch(e){} if(pref&&CAR_TYPES_LIST[pref]) setTimeout(()=>setMyCar(pref),0); }
-  mc.value=me&&me.car?me.car:'sport';
+  mc.value=me&&me.car?me.car:'sport'; { const taken=S.players.some(p=>p.id!==uid&&p.car==='tank'); const op=mc.querySelector('option[value="tank"]'); if(op){ op.disabled=taken; op.textContent=taken?'Танк — уже занят':CAR_TYPES_LIST.tank; } }
   const mcol=$('myColor'); if(!mcol.childElementCount) mcol.innerHTML=colorOptions();
   const myIdx=S.players.findIndex(p=>p.id===uid);
   const takenC=new Set(S.players.map((p,i)=>i===myIdx?-1:colIdx(S,i)));
@@ -2340,7 +2374,7 @@ function renderGame(){
 function startLocal(){
   const order=slots.map((v,i)=>({v,i})).filter(x=>x.v!=='off').map(x=>x.i);
   if(order.length<2){ $('localErr').textContent='Нужно хотя бы две команды.'; return; }
-  commit(s=>{ s.players=order.map(i=>({id:null,bot:slots[i]==='bot',slot:i,car:slotCars[i],color:slotColors[i]})); startMatch(s); });
+  let tankUsed=false; commit(s=>{ s.players=order.map(i=>{ let car=slotCars[i]; if(car==='tank'){ if(tankUsed) car='sport'; tankUsed=true; } return {id:null,bot:slots[i]==='bot',slot:i,car,color:slotColors[i]}; }); startMatch(s); });
 }
 function newRace(){
   if(mode==='online'){ if(S.host!==uid) return; commit(s=>{ s.status='lobby'; s.cars=[]; s.log=[]; s.winner=null; }); }
@@ -2455,7 +2489,7 @@ let myMsgs=null, chatKeys=[], chatSending=false, clockOffset=0;
 const chatNow=()=>Date.now()+clockOffset;
 /* ---------- honk: click your own car ---------- */
 let audioCtx=null, honkUnsub=null, honkSeen={}, honkPrimed=false, lastHonk=0, honkN=0;
-const HONK_TONES={sport:[523,659],jeep:[294,370],pickup:[330,415],van:[392,494],formula:[784,988]};
+const HONK_TONES={sport:[523,659],jeep:[294,370],pickup:[330,415],van:[392,494],formula:[784,988],tank:[131,165]};
 function honkSound(type){ try{ audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)(); if(audioCtx.state==='suspended') audioCtx.resume();
   const t0=audioCtx.currentTime, tones=HONK_TONES[type]||HONK_TONES.sport, g=audioCtx.createGain(); g.connect(audioCtx.destination);
   [[0,0.16],[0.2,0.42]].forEach(([a,b])=>{ g.gain.setValueAtTime(0,t0+a); g.gain.linearRampToValueAtTime(0.11,t0+a+0.02); g.gain.setValueAtTime(0.11,t0+b-0.05); g.gain.linearRampToValueAtTime(0,t0+b); });
@@ -2618,6 +2652,31 @@ $('chatForm').addEventListener('submit',e=>{
   });
 });
 
+/* ---------- танк: управление и анимация ---------- */
+function pickCarAt(x,y){ if(!ok3d) return null; const r=cv.getBoundingClientRect(); raycaster.setFromCamera(new THREE.Vector2(((x-r.left)/r.width)*2-1,-((y-r.top)/r.height)*2+1),camera);
+  const hits=raycaster.intersectObjects(cars3d.map(o=>o.g).filter(Boolean),true); for(const h of hits){ const ci=h.object.userData.ci; if(ci!=null) return ci; } return null; }
+function myTankReady(){ return S.status==='play'&&myTurn(false)&&tankReady(S,S.cur); }
+cv.addEventListener('mousedown',e=>{ if((e.buttons&3)!==3||!myTankReady()) return; e.preventDefault(); const ci=pickCarAt(e.clientX,e.clientY);
+  if(ci!=null&&tankTargets(S,S.cur).includes(ci)) actShoot(ci,false); else { $('msg').textContent='Наведите прицел на машину соперника на трассе и нажмите ЛКМ+ПКМ.'; } });
+cv.addEventListener('contextmenu',e=>{ if(S.status==='play'&&isTank(S,S.cur)) e.preventDefault(); });
+$('shootBtn').onclick=()=>{ if(!myTankReady()) return; aimMode=!aimMode; $('shootBtn').classList.toggle('on',aimMode); $('msg').textContent=aimMode?'Прицел: коснитесь машины соперника на трассе.':''; cv.style.cursor=aimMode?'crosshair':''; };
+setInterval(()=>{ const ok=myTankReady(); const b=$('shootBtn'); b.hidden=!(S.status==='play'&&isTank(S,S.cur)&&myTurn(false)); b.disabled=!ok; const cd=(S.tankCd||{})[S.cur]||0; b.textContent=ok?(aimMode?'🎯 Отмена':'🎯 Выстрел'):'🎯 перезарядка: '+cd; if(!ok&&aimMode){ aimMode=false; cv.style.cursor=''; } },300);
+const tween=(ms,fn)=>new Promise(res=>{ const t0=performance.now(); const st=t=>{ const k=Math.min(1,(t-t0)/ms); fn(k); if(k<1) requestAnimationFrame(st); else res(); }; requestAnimationFrame(st); });
+function boomSound(big){ try{ audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)(); if(audioCtx.state==='suspended') audioCtx.resume(); const t=audioCtx.currentTime, len=big?0.9:0.35, buf=audioCtx.createBuffer(1,audioCtx.sampleRate*len,audioCtx.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,big?2.2:4); const s=audioCtx.createBufferSource(), f=audioCtx.createBiquadFilter(), g=audioCtx.createGain(); f.type='lowpass'; f.frequency.value=big?600:1800; g.gain.value=big?0.8:0.45; s.buffer=buf; s.connect(f); f.connect(g); g.connect(audioCtx.destination); s.start(t);
+  const o=audioCtx.createOscillator(), og=audioCtx.createGain(); o.type='sine'; o.frequency.setValueAtTime(big?90:160,t); o.frequency.exponentialRampToValueAtTime(40,t+len*0.8); og.gain.setValueAtTime(big?0.5:0.3,t); og.gain.exponentialRampToValueAtTime(0.001,t+len); o.connect(og); og.connect(audioCtx.destination); o.start(t); o.stop(t+len); }catch(e){} }
+async function shotAnim(fi,ti,hit){ boomSound(false); if(!ok3d||reduce){ await sleep(300); if(hit) boomSound(true); return; }
+  const A=cars3d[fi], B=cars3d[ti]; if(!A||!B||!A.g||!B.g){ await sleep(300); return; }
+  const a=A.g.position.clone(), b=B.g.position.clone(); const yaw=Math.atan2(-(b.z-a.z),b.x-a.x);
+  const tur=A.g.userData.turret; if(tur){ const want=yaw-A.g.rotation.y, s0=tur.rotation.y; await tween(220,k=>{ tur.rotation.y=s0+(want-s0)*k; }); }
+  const shell=new THREE.Mesh(new THREE.SphereGeometry(0.06,10,8),new THREE.MeshBasicMaterial({color:lin('#ffd34a')})); scene.add(shell);
+  const flashM=new THREE.Mesh(new THREE.SphereGeometry(0.12,10,8),new THREE.MeshBasicMaterial({color:lin('#fff1a8'),transparent:true,opacity:1})); flashM.position.set(a.x+Math.cos(yaw)*0.5,a.y+0.3,a.z-Math.sin(yaw)*0.5); scene.add(flashM);
+  const dist=a.distanceTo(b), ms=Math.max(260,Math.min(700,dist*90));
+  await tween(ms,k=>{ shell.position.set(a.x+(b.x-a.x)*k,0.32+Math.sin(k*Math.PI)*Math.min(1.2,dist*0.08),a.z+(b.z-a.z)*k); flashM.material.opacity=Math.max(0,1-k*3); flashM.scale.setScalar(1+k*2); });
+  scene.remove(shell); scene.remove(flashM); shell.geometry.dispose(); flashM.geometry.dispose();
+  const ex=new THREE.Mesh(new THREE.SphereGeometry(0.3,16,12),new THREE.MeshBasicMaterial({color:lin(hit?'#ff8a2a':'#7fd3ff'),transparent:true,opacity:0.9,depthWrite:false})); ex.position.set(b.x,0.3,b.z); scene.add(ex); boomSound(hit);
+  await tween(420,k=>{ ex.scale.setScalar(0.4+k*(hit?2.4:1.4)); ex.material.opacity=0.9*(1-k); });
+  scene.remove(ex); ex.geometry.dispose(); }
 /* ---------- editor & picking ---------- */
 let downXY=null, palIdx=-1;
 cv.addEventListener('pointerdown',e=>{ downXY=[e.clientX,e.clientY]; });
@@ -2636,6 +2695,7 @@ cv.addEventListener('pointerup',e=>{
   if(moved>6) return;
   const r=cv.getBoundingClientRect(), ndc=new THREE.Vector2(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);
   raycaster.setFromCamera(ndc,camera);
+  if(aimMode){ const ci=pickCarAt(e.clientX,e.clientY); if(ci!=null&&tankTargets(S,S.cur).includes(ci)){ actShoot(ci,false); cv.style.cursor=''; } else $('msg').textContent='Это не цель — коснитесь машины соперника на трассе.'; return; }
   if(die3d&&raycaster.intersectObject(die3d,false).length){ if(S.status==='play') actRoll(false); else if(S.status==='lobby'&&(mode==='local'||S.host===uid)) $('rollBtn').click(); return; }
   const sel=selectableSet();
   if(sel.size){
