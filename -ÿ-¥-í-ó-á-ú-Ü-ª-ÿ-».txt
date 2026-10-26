@@ -1,0 +1,24 @@
+ИГРОТЕКА — как выложить на GitHub Pages
+
+Структура:
+  index.html            — главная страница с играми
+  img/                  — картинки для карточек
+  mashinki/index.html   — игра «Машинки»
+  shashki/index.html    — игра «Русские шашки»
+  morskoy-boy/index.html — игра «Морской бой»
+  bombohomyaki/index.html — игра «Бомбохомяки»
+  database.rules.json   — правила Firebase (те же, что были)
+
+Как обновить сайт в репозитории:
+1. Открой репозиторий на github.com.
+2. «Add file» → «Upload files».
+3. Перетащи ВСЁ содержимое папки games-site (index.html, папки img, mashinki, shashki, morskoy-boy, bombohomyaki).
+   Папки перетаскивай целиком — GitHub сохранит структуру.
+4. Внизу «Commit changes». Через 1–2 минуты всё обновится:
+   главная  — https://ndjsjshdhdhdj33-svg.github.io/mashini125125521/
+   Машинки  — https://ndjsjshdhdhdj33-svg.github.io/mashini125125521/mashinki/
+   Шашки    — https://ndjsjshdhdhdj33-svg.github.io/mashini125125521/shashki/
+   Морской бой — https://ndjsjshdhdhdj33-svg.github.io/mashini125125521/morskoy-boy/
+
+Старые ссылки-приглашения в Машинки (?room=КОД) сами перекинут куда нужно.
+Шашки и морской бой используют ту же базу Firebase — ничего настраивать не нужно.
