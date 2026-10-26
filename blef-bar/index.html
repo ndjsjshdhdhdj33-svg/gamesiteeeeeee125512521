@@ -610,7 +610,7 @@ function makeDb(){
   const parse=v=>{ if(v==null||typeof v.json!=='string') return undefined; try{ return JSON.parse(v.json); }catch(e){ return undefined; } };
   return { doc(path){ const {id,ref}=docRef(path); const snap=v=>{ const d=parse(v); return {id,exists:d!==undefined,data:()=>d}; };
     return { get:()=>ref.once('value').then(sn=>snap(sn.val())), set:d=>ref.set({json:JSON.stringify(d),ts:Date.now()}), delete:()=>ref.remove(),
-      mutate:fn=>ref.transaction(cur=>{ const o=parse(cur); if(o===undefined) return cur; const r=fn(o); if(r===undefined) return; return {json:JSON.stringify(r),ts:Date.now()}; }).then(res=>({ok:res.committed,data:parse(res.snapshot.val())})),
+      mutate:fn=>ref.transaction(cur=>{ const o=parse(cur); if(o===undefined) return cur; const r=fn(o); if(r===undefined) return; return {json:JSON.stringify(r),ts:Date.now()}; },undefined,false).then(res=>({ok:res.committed,data:parse(res.snapshot.val())})),
       onSnapshot(next){ const cb=sn=>next(snap(sn.val())); ref.on('value',cb); return ()=>ref.off('value',cb); } }; } };
 }
 function localId(){ let id=null; try{ id=localStorage.getItem('mashinki-uid'); }catch(e){} if(!id){ id='p'+Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4); try{ localStorage.setItem('mashinki-uid',id); }catch(e){} } return id; }
@@ -660,25 +660,29 @@ $('copyLink').onclick=()=>{ const u=location.origin+location.pathname+'?room='+r
 
 /* ---------- chat for online rooms (separate doc, last 60 messages) ---------- */
 let chatUnsub=null, chatRoomPath=null, chatSeen=0, chatPrimed=false;
+let chatRef=null, chatCb=null;
 function chatStart(path){
   chatStop(); chatRoomPath=path; chatPrimed=false; $('chatBox').hidden=false; $('chatList').innerHTML='<li class="ce">Сообщений пока нет — напишите остальным</li>';
-  db.doc(path).get().then(sn=>{ if(!sn.exists) db.doc(path).set({msgs:[]}).catch(()=>{}); });
-  chatUnsub=db.doc(path).onSnapshot(sn=>{ const d=sn.exists?sn.data():null; chatRender(d&&Array.isArray(d.msgs)?d.msgs:[]); });
+  if(!rt) return; chatRef=rt.ref('db/'+path.replace(/\//g,'_')+'m').limitToLast(60);
+  chatCb=sn=>{ const v=sn.val()||{}; const msgs=[]; Object.keys(v).forEach(k=>{ try{ const m=JSON.parse(v[k].json); if(m&&m.x) msgs.push(m); }catch(e){} }); msgs.sort((a,b)=>a.t-b.t); chatRender(msgs); };
+  chatRef.on('value',chatCb);
 }
-function chatStop(){ if(chatUnsub){ chatUnsub(); chatUnsub=null; } chatRoomPath=null; const b=$('chatBox'); if(b) b.hidden=true; }
+function chatStop(){ if(chatRef&&chatCb){ chatRef.off('value',chatCb); } chatRef=null; chatCb=null; chatRoomPath=null; const b=$('chatBox'); if(b) b.hidden=true; }
+let chatLast=[], chatPend=[];
 function chatRender(msgs){
-  const ul=$('chatList'); if(!msgs.length){ ul.innerHTML='<li class="ce">Сообщений пока нет — напишите остальным</li>'; return; }
+  if(msgs) chatLast=msgs; else msgs=chatLast; chatPend=chatPend.filter(p=>!msgs.some(m=>m.n===p.n)&&Date.now()-p.t<15000); const all=msgs.concat(chatPend);
+  const ul=$('chatList'); if(!all.length){ ul.innerHTML='<li class="ce">Сообщений пока нет — напишите остальным</li>'; return; }
   const atBottom=ul.scrollHeight-ul.scrollTop-ul.clientHeight<40;
-  ul.innerHTML=msgs.map(m=>{ const d=new Date(m.t); return '<li class="'+(m.id===uid?'me':'')+'"><b>'+(m.id===uid?'Вы':esc(m.name||'Соперник'))+'</b><time>'+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+'</time><span>'+esc(m.x)+'</span></li>'; }).join('');
-  if(atBottom||!chatPrimed) ul.scrollTop=ul.scrollHeight;
+  ul.innerHTML=all.map(m=>{ const d=new Date(m.t); return '<li class="'+(m.id===uid?'me':'')+'"'+(m.pend?' style="opacity:.6"':'')+'><b>'+(m.id===uid?'Вы':esc(m.name||'Соперник'))+'</b><time>'+(m.pend?'…':String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'))+'</time><span>'+esc(m.x)+'</span></li>'; }).join('');
+  if(atBottom||!chatPrimed||chatPend.length) ul.scrollTop=ul.scrollHeight;
   const lastOther=msgs.filter(m=>m.id!==uid).length;
   if(chatPrimed&&lastOther>chatSeen){ chatBlip(); if($('chatBox').classList.contains('closed')){ const bd=$('chatBadge'); bd.textContent=(+bd.textContent||0)+lastOther-chatSeen; bd.hidden=false; } }
   chatSeen=lastOther; chatPrimed=true;
 }
 function chatSend(){
-  const inp=$('chatInput'), x=inp.value.trim().slice(0,200); if(!x||!chatRoomPath) return; inp.value='';
-  db.doc(chatRoomPath).mutate(o=>{ const msgs=Array.isArray(o.msgs)?o.msgs:[]; msgs.push({id:uid,name:myName||'Игрок',t:Date.now(),x}); o.msgs=msgs.slice(-60); return o; })
-    .then(r=>{ if(!r.ok&&!r.data) db.doc(chatRoomPath).set({msgs:[{id:uid,name:myName||'Игрок',t:Date.now(),x}]}); }).catch(()=>{ inp.value=x; });
+  const inp=$('chatInput'), x=inp.value.trim().slice(0,200); if(!x||!chatRoomPath||!rt) return; inp.value='';
+  const n=Math.random().toString(36).slice(2,9), msg={id:uid,name:myName||'Игрок',t:Date.now(),x,n}; chatPend.push(Object.assign({pend:1},msg)); chatRender();
+  rt.ref('db/'+chatRoomPath.replace(/\//g,'_')+'m').push().set({json:JSON.stringify(msg),ts:Date.now()}).catch(()=>{ chatPend=chatPend.filter(p=>p.n!==n); chatRender(); inp.value=x; });
 }
 function chatBlip(){ try{ const a=window.__chatCtx||(window.__chatCtx=new (window.AudioContext||window.webkitAudioContext)()); const t=a.currentTime, o=a.createOscillator(), g=a.createGain(); o.type='sine'; o.frequency.setValueAtTime(880,t); o.frequency.setValueAtTime(1180,t+0.07); g.gain.setValueAtTime(0.06,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.18); o.connect(g); g.connect(a.destination); o.start(t); o.stop(t+0.2); }catch(e){} }
 $('chatForm').addEventListener('submit',e=>{ e.preventDefault(); chatSend(); });
@@ -725,7 +729,7 @@ const PARTY=(()=>{
       /* a missing doc can be a momentary blip: confirm with the server before giving up */
       chk=setTimeout(()=>db.doc('party/'+c).get().then(s2=>{ const d2=s2.exists?s2.data():null; if(!d2||d2.dead||!(d2.members||[]).some(m=>m.id===uid)) cb(null); else cb(d2); }).catch(()=>{}),1500); }); }
   const online=m=>Date.now()-(m.t||0)<75000;
-  return {GAMES,ROOMKEY,db,uid,code,name,create,join,leave,beat,setGo,watch,online,ls,setCode};
+  return {GAMES,ROOMKEY,db,rt,uid,code,name,create,join,leave,beat,setGo,watch,online,ls,setCode};
 })();
 
 /* ===== лобби сайта внутри игры: следовать за лидером / публиковать комнату лидера ===== */

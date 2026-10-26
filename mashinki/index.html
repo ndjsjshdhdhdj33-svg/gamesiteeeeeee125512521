@@ -2919,7 +2919,7 @@ const PARTY=(()=>{
       /* a missing doc can be a momentary blip: confirm with the server before giving up */
       chk=setTimeout(()=>db.doc('party/'+c).get().then(s2=>{ const d2=s2.exists?s2.data():null; if(!d2||d2.dead||!(d2.members||[]).some(m=>m.id===uid)) cb(null); else cb(d2); }).catch(()=>{}),1500); }); }
   const online=m=>Date.now()-(m.t||0)<75000;
-  return {GAMES,ROOMKEY,db,uid,code,name,create,join,leave,beat,setGo,watch,online,ls,setCode};
+  return {GAMES,ROOMKEY,db,rt,uid,code,name,create,join,leave,beat,setGo,watch,online,ls,setCode};
 })();
 
 /* ===== лобби сайта внутри игры: следовать за лидером / публиковать комнату лидера ===== */
